@@ -1,3 +1,4 @@
+'use client';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { authAPI, setToken, clearToken } from '@/lib/api';
@@ -23,7 +24,9 @@ export const useAuthStore = create<AuthState>()(
       login: async (email, password) => {
         set({ isLoading: true });
         try {
-          const res = await authAPI.login(email, password);
+          // Normalize email to avoid case issues
+          const normalizedEmail = email.trim().toLowerCase();
+          const res = await authAPI.login(normalizedEmail, password);
           setToken(res.access_token);
           set({ user: res.user, isAuthenticated: true, isLoading: false });
         } catch (err) {
@@ -35,7 +38,8 @@ export const useAuthStore = create<AuthState>()(
       register: async (email, password, name) => {
         set({ isLoading: true });
         try {
-          const res = await authAPI.register(email, password, name);
+          const normalizedEmail = email.trim().toLowerCase();
+          const res = await authAPI.register(normalizedEmail, password, name);
           setToken(res.access_token);
           set({ user: res.user, isAuthenticated: true, isLoading: false });
         } catch (err) {
