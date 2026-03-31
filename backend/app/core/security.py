@@ -3,6 +3,7 @@ JWT-based authentication and security utilities.
 """
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+import unicodedata
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -19,14 +20,28 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    """
+    Hash a password safely, normalizing it to NFC UTF-8 form.
+    Handles special characters and prevents encoding errors.
+    """
+    if not password:
+        raise ValueError("Password cannot be empty")
+    normalized = unicodedata.normalize("NFC", password)
+    return pwd_context.hash(normalized)
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    """
+    Verify a password against a hash, safely handling UTF-8 characters.
+    """
+    normalized = unicodedata.normalize("NFC", plain)
+    return pwd_context.verify(normalized, hashed)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """
+    Create a JWT access token with expiration.
+    """
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + (
         expires_delta or timedelta(minutes=settings.jwt_expire_minutes)
@@ -36,6 +51,10 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 
 def decode_access_token(token: str) -> dict:
+    """
+    Decode a JWT access token and return its payload.
+    Raises HTTPException if token is invalid or expired.
+    """
     try:
         payload = jwt.decode(
             token,
@@ -54,6 +73,9 @@ def decode_access_token(token: str) -> dict:
 async def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
 ) -> dict:
+    """
+    FastAPI dependency to get the currently authenticated user.
+    """
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -73,6 +95,9 @@ async def get_current_user(
 async def get_optional_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
 ) -> Optional[dict]:
+    """
+    FastAPI dependency to get an optional authenticated user (or None).
+    """
     if not credentials:
         return None
     try:
