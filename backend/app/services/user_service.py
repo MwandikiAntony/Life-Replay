@@ -1,8 +1,9 @@
-"""
+""" 
 User service: registration, login, profile management via Firestore.
 """
 from datetime import datetime
 from typing import Optional
+import unicodedata
 
 from fastapi import HTTPException, status
 from google.cloud.firestore_v1 import AsyncDocumentReference
@@ -23,10 +24,13 @@ class UserService:
         self.db = get_db()
 
     async def register(self, data: UserRegister) -> TokenResponse:
-        """Register a new user."""
-        # Check if email already exists
+        """Register a new user with UTF-8 safe handling."""
+        # Normalize inputs
+        email = unicodedata.normalize("NFC", data.email.strip().lower())
+        name = unicodedata.normalize("NFC", data.name.strip())
+
         users_ref = self.db.collection(Collections.USERS)
-        existing = await users_ref.where("email", "==", data.email).get()
+        existing = await users_ref.where("email", "==", email).get()
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -36,11 +40,13 @@ class UserService:
         user_id = users_ref.document().id
         now = datetime.utcnow()
 
+        password_hash = hash_password(data.password)  # safely handles UTF-8
+
         user_doc = {
             "user_id": user_id,
-            "email": data.email,
-            "name": data.name,
-            "password_hash": hash_password(data.password),
+            "email": email,
+            "name": name,
+            "password_hash": password_hash,
             "created_at": now.isoformat(),
             "avatar_url": None,
             "total_sessions": 0,
@@ -60,21 +66,22 @@ class UserService:
             "updated_at": now.isoformat(),
         })
 
-        logger.info("User registered", user_id=user_id, email=data.email)
+        logger.info("User registered", user_id=user_id, email=email)
 
         profile = UserProfile(
             user_id=user_id,
-            email=data.email,
-            name=data.name,
+            email=email,
+            name=name,
             created_at=now,
         )
-        token = create_access_token({"sub": user_id, "email": data.email, "name": data.name})
+        token = create_access_token({"sub": user_id, "email": email, "name": name})
         return TokenResponse(access_token=token, user=profile)
 
     async def login(self, data: UserLogin) -> TokenResponse:
-        """Authenticate a user and return JWT."""
+        """Authenticate a user and return JWT, UTF-8 safe."""
+        email = unicodedata.normalize("NFC", data.email.strip().lower())
         users_ref = self.db.collection(Collections.USERS)
-        docs = await users_ref.where("email", "==", data.email).get()
+        docs = await users_ref.where("email", "==", email).get()
         if not docs:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -126,9 +133,10 @@ class UserService:
         """Increment user stats after a session completes."""
         doc_ref = self.db.collection(Collections.USERS).document(user_id)
         minutes = session_duration_seconds // 60
+        from google.cloud.firestore_v1 import Increment
         await doc_ref.update({
-            "total_sessions": firestore.Increment(1),
-            "total_practice_minutes": firestore.Increment(minutes),
+            "total_sessions": Increment(1),
+            "total_practice_minutes": Increment(minutes),
         })
 
     async def get_settings(self, user_id: str) -> UserSettings:
