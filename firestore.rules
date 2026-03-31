@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users can only read/write their own document
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // User settings
+    match /user_settings/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Sessions and sub-collections
+    match /sessions/{sessionId} {
+      allow read, write: if request.auth != null
+        && resource.data.user_id == request.auth.uid;
+
+      allow create: if request.auth != null
+        && request.resource.data.user_id == request.auth.uid;
+
+      // Sub-collections inherit session ownership
+      match /metrics/{docId} {
+        allow read, write: if request.auth != null
+          && get(/databases/$(database)/documents/sessions/$(sessionId)).data.user_id
+             == request.auth.uid;
+      }
+
+      match /feedback/{docId} {
+        allow read, write: if request.auth != null
+          && get(/databases/$(database)/documents/sessions/$(sessionId)).data.user_id
+             == request.auth.uid;
+      }
+
+      match /transcripts/{docId} {
+        allow read, write: if request.auth != null
+          && get(/databases/$(database)/documents/sessions/$(sessionId)).data.user_id
+             == request.auth.uid;
+      }
+    }
+  }
+}
