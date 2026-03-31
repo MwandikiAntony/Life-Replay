@@ -23,20 +23,21 @@ export default function RegisterPage() {
     const trimmedPassword = password.trim();
 
     try {
-      await register(trimmedName, trimmedEmail, trimmedPassword);
-      toast.success('Account created successfully!');
-      router.push('/dashboard');
-    } catch (err: any) {
-      // Handle Axios/FastAPI validation errors (422)
-      if (err?.response?.data) {
-        const detail = Array.isArray(err.response.data)
-          ? err.response.data.map((e: any) => e.msg).join(', ')
-          : err.response.data.detail;
-        toast.error(detail || 'Registration failed');
-      } else {
-        toast.error('Registration failed');
-      }
-    }
+  await register(trimmedName, trimmedEmail, trimmedPassword);
+  toast.success('Account created successfully!');
+  router.push('/dashboard');
+} catch (err: any) {
+  if (err?.response?.data) {
+    // FastAPI validation errors are an array of objects
+    const detail =
+      Array.isArray(err.response.data)
+        ? err.response.data.map((e: any) => e.msg).join(', ')
+        : err.response.data.detail;
+    toast.error(detail || 'Registration failed');
+  } else {
+    toast.error('Registration failed');
+  }
+}
   };
 
   return (
