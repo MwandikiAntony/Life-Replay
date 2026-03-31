@@ -1,12 +1,13 @@
-""" 
+"""
 User service: registration, login, profile management via Firestore.
 """
 from datetime import datetime
-from typing import Optional
 import unicodedata
+from typing import Optional
 
 from fastapi import HTTPException, status
 from google.cloud.firestore_v1 import AsyncDocumentReference
+from google.cloud.firestore_v1 import Increment
 
 from app.core.security import hash_password, verify_password, create_access_token
 from app.db.firestore import get_db, Collections
@@ -23,15 +24,14 @@ class UserService:
     def __init__(self):
         self.db = get_db()
 
-    async def register(self, data: UserRegister) -> TokenResponse:
-        """Register a new user with UTF-8 safe handling."""
-        # Normalize inputs
-        email = unicodedata.normalize("NFC", data.email.strip().lower())
-        name = unicodedata.normalize("NFC", data.name.strip())
+    async def create_user(self, name: str, email: str, hashed_password: str) -> UserProfile:
+        """Create a new user directly (used internally by /register)."""
+        email = unicodedata.normalize("NFC", email.strip().lower())
+        name = unicodedata.normalize("NFC", name.strip())
 
         users_ref = self.db.collection(Collections.USERS)
-        existing = await users_ref.where("email", "==", email).get()
-        if existing:
+        existing_docs = await users_ref.where("email", "==", email).get()
+        if existing_docs:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already registered",
@@ -40,13 +40,11 @@ class UserService:
         user_id = users_ref.document().id
         now = datetime.utcnow()
 
-        password_hash = hash_password(data.password)  # safely handles UTF-8
-
         user_doc = {
             "user_id": user_id,
-            "email": email,
             "name": name,
-            "password_hash": password_hash,
+            "email": email,
+            "password_hash": hashed_password,
             "created_at": now.isoformat(),
             "avatar_url": None,
             "total_sessions": 0,
@@ -55,7 +53,7 @@ class UserService:
 
         await users_ref.document(user_id).set(user_doc)
 
-        # Create default settings
+        # Initialize default settings
         await self.db.collection(Collections.SETTINGS).document(user_id).set({
             "user_id": user_id,
             "coaching_sensitivity": "medium",
@@ -67,18 +65,26 @@ class UserService:
         })
 
         logger.info("User registered", user_id=user_id, email=email)
-
-        profile = UserProfile(
+        return UserProfile(
             user_id=user_id,
-            email=email,
             name=name,
-            created_at=now,
+            email=email,
+            created_at=now
         )
-        token = create_access_token({"sub": user_id, "email": email, "name": name})
+
+    async def register(self, data: UserRegister) -> TokenResponse:
+        """Register via UserRegister schema and return JWT."""
+        hashed_pw = hash_password(data.password)
+        profile = await self.create_user(data.name, data.email, hashed_pw)
+        token = create_access_token({
+            "sub": profile.user_id,
+            "email": profile.email,
+            "name": profile.name
+        })
         return TokenResponse(access_token=token, user=profile)
 
     async def login(self, data: UserLogin) -> TokenResponse:
-        """Authenticate a user and return JWT, UTF-8 safe."""
+        """Authenticate a user and return JWT."""
         email = unicodedata.normalize("NFC", data.email.strip().lower())
         users_ref = self.db.collection(Collections.USERS)
         docs = await users_ref.where("email", "==", email).get()
@@ -133,13 +139,13 @@ class UserService:
         """Increment user stats after a session completes."""
         doc_ref = self.db.collection(Collections.USERS).document(user_id)
         minutes = session_duration_seconds // 60
-        from google.cloud.firestore_v1 import Increment
         await doc_ref.update({
             "total_sessions": Increment(1),
             "total_practice_minutes": Increment(minutes),
         })
 
     async def get_settings(self, user_id: str) -> UserSettings:
+        """Fetch user settings."""
         doc = await self.db.collection(Collections.SETTINGS).document(user_id).get()
         if not doc.exists:
             return UserSettings(user_id=user_id)
@@ -148,8 +154,24 @@ class UserService:
         return UserSettings(**data)
 
     async def update_settings(self, user_id: str, updates: dict) -> UserSettings:
+        """Update user settings in Firestore."""
         updates["updated_at"] = datetime.utcnow().isoformat()
-        await self.db.collection(Collections.SETTINGS).document(user_id).set(
-            updates, merge=True
-        )
+        await self.db.collection(Collections.SETTINGS).document(user_id).set(updates, merge=True)
         return await self.get_settings(user_id)
+
+    async def get_user_by_email(self, email: str) -> Optional[UserProfile]:
+        """Fetch a user by email (used in login)."""
+        email = unicodedata.normalize("NFC", email.strip().lower())
+        docs = await self.db.collection(Collections.USERS).where("email", "==", email).get()
+        if not docs:
+            return None
+        data = docs[0].to_dict()
+        return UserProfile(
+            user_id=data["user_id"],
+            email=data["email"],
+            name=data["name"],
+            created_at=datetime.fromisoformat(data["created_at"]),
+            avatar_url=data.get("avatar_url"),
+            total_sessions=data.get("total_sessions", 0),
+            total_practice_minutes=data.get("total_practice_minutes", 0),
+        )

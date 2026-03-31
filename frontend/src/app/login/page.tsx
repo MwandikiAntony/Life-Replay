@@ -26,16 +26,16 @@ export default function LoginPage() {
       toast.success('Welcome back!');
       router.push('/dashboard');
     } catch (err: any) {
-      // Handle Axios/FastAPI 422 validation errors
-      if (err?.response?.data) {
-        const detail = Array.isArray(err.response.data)
-          ? err.response.data.map((e: any) => e.msg).join(', ')
-          : err.response.data.detail;
-        toast.error(detail || 'Login failed');
-      } else {
-        toast.error('Login failed');
-      }
-    }
+  if (err?.response?.data) {
+    const detail =
+      Array.isArray(err.response.data)
+        ? err.response.data.map((e: any) => e.msg).join(', ')
+        : err.response.data.detail;
+    toast.error(detail || 'Login failed');
+  } else {
+    toast.error('Login failed');
+  }
+}
   };
 
   return (
