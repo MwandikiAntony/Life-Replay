@@ -15,6 +15,10 @@ export default function RootPage() {
     }
   }, [isAuthenticated, router]);
 
+  useEffect(() => {
+  useAuthStore.getState().fetchMe();
+}, []);
+
   return (
     <div className="min-h-screen bg-void flex items-center justify-center">
       <div className="flex items-center gap-3">

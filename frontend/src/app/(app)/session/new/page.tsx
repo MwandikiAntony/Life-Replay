@@ -79,23 +79,25 @@ export default function NewSessionPage() {
   });
 
   const handleStart = async () => {
-    try {
-      const session = await sessionsAPI.create(sessionTitle || undefined);
-      setSessionId(session.session_id);
+  try {
+    const session = await sessionsAPI.create(sessionTitle || undefined);
+    const id = session.session_id;
+    setSessionId(id);
 
-      await startCapture();
-      connect();
+    await startCapture();
 
-      // Wait for WS connection then start
-      setTimeout(() => {
-        startSession();
-        setIsStarted(true);
-        toast.success('Session started! AI coaching is active.');
-      }, 1000);
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to start session');
-    }
-  };
+    // Pass sessionId explicitly to connect
+    connect(id);
+
+    setTimeout(() => {
+      startSession();
+      setIsStarted(true);
+      toast.success('Session started! AI coaching is active.');
+    }, 1000);
+  } catch (err: any) {
+    toast.error(err?.message || 'Failed to start session');
+  }
+};
 
   const handleStop = useCallback(() => {
     stopSession();

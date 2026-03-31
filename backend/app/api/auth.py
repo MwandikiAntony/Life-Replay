@@ -2,9 +2,8 @@
 Authentication endpoints: register, login, profile, settings.
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from pydantic import ValidationError
 from app.core.logging import get_logger
-from app.core.security import get_current_user, hash_password, verify_password, create_access_token
+from app.core.security import get_current_user, create_access_token
 from app.models.schemas import UserRegister, UserLogin, TokenResponse, UserProfile, UserSettings
 from app.services.user_service import UserService
 
@@ -25,15 +24,10 @@ async def register(
 ):
     logger.info("Register request received", payload=data.dict(), client=str(request.client))
     try:
-        hashed_pw = hash_password(data.password)
-        user = await svc.create_user(
-            name=data.name,
-            email=data.email,
-            hashed_password=hashed_pw
-        )
-        token = create_access_token({"sub": user.id, "email": user.email, "name": user.name})
-        logger.info("User registered successfully", user_id=user.id)
-        return TokenResponse(access_token=token, token_type="bearer")
+        # Use new UserService.register method
+        token_response = await svc.register(data)
+        logger.info("User registered successfully", user_id=token_response.user.user_id)
+        return token_response
     except Exception as e:
         logger.error("Registration failed", error=str(e))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -47,18 +41,17 @@ async def login(
     svc: UserService = Depends(get_user_service),
 ):
     logger.info("Login request received", payload=data.dict(), client=str(request.client))
-    user = await svc.get_user_by_email(data.email)
-    if not user:
-        logger.warning("Login failed: user not found", email=data.email)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-
-    if not verify_password(data.password, user.hashed_password):
-        logger.warning("Login failed: invalid password", email=data.email)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-
-    token = create_access_token({"sub": user.id, "email": user.email, "name": user.name})
-    logger.info("Login successful", user_id=user.id)
-    return TokenResponse(access_token=token, token_type="bearer")
+    try:
+        # Use new UserService.login method
+        token_response = await svc.login(data)
+        logger.info("Login successful", user_id=token_response.user.user_id)
+        return token_response
+    except HTTPException as e:
+        logger.warning("Login failed", detail=e.detail)
+        raise e
+    except Exception as e:
+        logger.error("Unexpected login error", error=str(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 # ─── Get current user ──────────────────────────────────────

@@ -34,103 +34,100 @@ export function useSessionWS({
   const [status, setStatus] = useState<WSStatus>('disconnected');
   const [isSessionLive, setIsSessionLive] = useState(false);
 
-  const connect = useCallback(() => {
-    const token = getToken();
-    if (!token) {
-      onError?.('Not authenticated');
-      return;
-    }
-
-    setStatus('connecting');
-    const ws = new WebSocket(`${WS_URL}/ws/session?token=${token}`);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      setStatus('connected');
-      // Start ping keepalive
-      pingIntervalRef.current = setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'ping' }));
-        }
-      }, 20000);
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const msg: WSMessage = JSON.parse(event.data);
-        handleMessage(msg);
-      } catch (e) {
-        console.error('WS parse error', e);
-      }
-    };
-
-    ws.onerror = () => {
-      setStatus('error');
-      onError?.('WebSocket connection error');
-    };
-
-    ws.onclose = () => {
-      setStatus('disconnected');
-      setIsSessionLive(false);
-      clearInterval(pingIntervalRef.current);
-    };
-  }, [sessionId]);
-
   const handleMessage = useCallback((msg: WSMessage) => {
-    switch (msg.type) {
-      case 'session_started':
-        setIsSessionLive(true);
-        break;
+  switch (msg.type) {
+    case 'session_started':
+      setIsSessionLive(true);
+      break;
+    case 'session_stopped':
+      setIsSessionLive(false);
+      break;
+    case 'metrics':
+      onMetrics?.(msg.data as unknown as MetricSnapshot);
+      break;
+    case 'transcript':
+      if (msg.data && onTranscript) {
+        onTranscript({
+          text: msg.data.text as string,
+          fillerWords: (msg.data.filler_words as string[]) || [],
+          timestampMs: msg.data.timestamp_ms as number,
+        });
+      }
+      break;
+    case 'coaching':
+      if (msg.data && onCoaching) {
+        const coaching: LiveCoachingMessage = {
+          id: (msg.data.id as string) || uuidv4(),
+          feedback_type: msg.data.feedback_type as any,
+          severity: msg.data.severity as any,
+          message: msg.data.message as string,
+          detail: msg.data.detail as string | undefined,
+          timestamp_ms: msg.data.timestamp_ms as number,
+          expiresAt: Date.now() + COACHING_DISPLAY_MS,
+        };
+        onCoaching(coaching);
+      }
+      break;
+    case 'session_summary':
+      if (msg.data && onSummary) {
+        onSummary(msg.data as unknown as SessionSummary);
+      }
+      break;
+    case 'error':
+      onError?.(msg.data?.message as string || 'Unknown error');
+      break;
+    case 'pong':
+      break;
+  }
+}, [onMetrics, onTranscript, onCoaching, onSummary, onError]);
 
-      case 'session_stopped':
-        setIsSessionLive(false);
-        break;
+const connect = useCallback((id?: string) => {
+  const token = getToken();
+  if (!token) {
+    onError?.('Not authenticated');
+    return;
+  }
 
-      case 'metrics':
-        if (msg.data && onMetrics) {
-          onMetrics(msg.data as unknown as MetricSnapshot);
-        }
-        break;
+  const wsSessionId = id || sessionId;
+  if (!wsSessionId) {
+    onError?.('session_id is required before connecting');
+    return;
+  }
 
-      case 'transcript':
-        if (msg.data && onTranscript) {
-          onTranscript({
-            text: msg.data.text as string,
-            fillerWords: (msg.data.filler_words as string[]) || [],
-            timestampMs: msg.data.timestamp_ms as number,
-          });
-        }
-        break;
+  setStatus('connecting');
 
-      case 'coaching':
-        if (msg.data && onCoaching) {
-          const coaching: LiveCoachingMessage = {
-            id: (msg.data.id as string) || uuidv4(),
-            feedback_type: msg.data.feedback_type as any,
-            severity: msg.data.severity as any,
-            message: msg.data.message as string,
-            detail: msg.data.detail as string | undefined,
-            timestamp_ms: msg.data.timestamp_ms as number,
-            expiresAt: Date.now() + COACHING_DISPLAY_MS,
-          };
-          onCoaching(coaching);
-        }
-        break;
+  const ws = new WebSocket(`${WS_URL}/ws/session?token=${token}&session_id=${wsSessionId}`);
+  wsRef.current = ws;
 
-      case 'session_summary':
-        if (msg.data && onSummary) {
-          onSummary(msg.data as unknown as SessionSummary);
-        }
-        break;
+  ws.onopen = () => {
+    setStatus('connected');
+    pingIntervalRef.current = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' }));
+    }, 20000);
+  };
 
-      case 'error':
-        onError?.(msg.data?.message as string || 'Unknown error');
-        break;
-
-      case 'pong':
-        break;
+  ws.onmessage = (event) => {
+    try {
+      const msg: WSMessage = JSON.parse(event.data);
+      handleMessage(msg); // ✅ now valid
+    } catch (e) {
+      console.error('WS parse error', e);
     }
-  }, [onMetrics, onTranscript, onCoaching, onSummary, onError]);
+  };
+
+  ws.onerror = () => {
+    setStatus('error');
+    onError?.('WebSocket connection error');
+  };
+
+  ws.onclose = () => {
+    setStatus('disconnected');
+    setIsSessionLive(false);
+    clearInterval(pingIntervalRef.current);
+  };
+}, [sessionId, onError, handleMessage]);
+
+
 
   const send = useCallback((type: WSMessageType, data?: Record<string, unknown>) => {
     const ws = wsRef.current;
