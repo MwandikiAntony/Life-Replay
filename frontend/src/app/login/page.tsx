@@ -17,7 +17,9 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await login(email, password);
+      // Normalize email input to match backend
+      const normalizedEmail = email.trim().toLowerCase();
+      await login(normalizedEmail, password);
       toast.success('Welcome back!');
       router.push('/dashboard');
     } catch (err: any) {
