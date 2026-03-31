@@ -16,14 +16,25 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Trim inputs to prevent minor validation errors
+    const trimmedEmail = email.trim();
+    const trimmedPassword = password.trim();
+
     try {
-      // Normalize email input to match backend
-      const normalizedEmail = email.trim().toLowerCase();
-      await login(normalizedEmail, password);
+      await login(trimmedEmail, trimmedPassword);
       toast.success('Welcome back!');
       router.push('/dashboard');
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || 'Login failed');
+      // Handle Axios/FastAPI 422 validation errors
+      if (err?.response?.data) {
+        const detail = Array.isArray(err.response.data)
+          ? err.response.data.map((e: any) => e.msg).join(', ')
+          : err.response.data.detail;
+        toast.error(detail || 'Login failed');
+      } else {
+        toast.error('Login failed');
+      }
     }
   };
 

@@ -1,27 +1,28 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import Cookies from 'js-cookie';
 import type {
-  AuthResponse, User, Session, SessionSummary,
-  MetricSnapshot, FeedbackItem, TranscriptSegment,
-  DashboardStats, PerformanceTrend, UserSettings,
+  AuthResponse, User, UserSettings, Session,
+  SessionSummary, MetricSnapshot, FeedbackItem,
+  TranscriptSegment, DashboardStats, PerformanceTrend,
 } from '@/types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 // ─── Axios instance ────────────────────────────────────────────────────────
-
 const api: AxiosInstance = axios.create({
   baseURL: `${BASE_URL}/api/v1`,
   timeout: 15000,
-  headers: { 'Content-Type': 'application/json' },
+  headers: { 'Content-Type': 'application/json; charset=utf-8' }, // ensure UTF-8
 });
 
+// Add auth token to every request
 api.interceptors.request.use((config) => {
   const token = Cookies.get('lr_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
+// Global response handling
 api.interceptors.response.use(
   (res) => res,
   (error: AxiosError) => {
@@ -33,20 +34,24 @@ api.interceptors.response.use(
   }
 );
 
+// ─── Token helpers ─────────────────────────────────────────────────────────
 export const getToken = () => Cookies.get('lr_token') || '';
-export const setToken = (token: string) => Cookies.set('lr_token', token, { expires: 7 });
+export const setToken = (token: string) =>
+  Cookies.set('lr_token', token, { expires: 7, sameSite: 'lax' });
 export const clearToken = () => Cookies.remove('lr_token');
 
-// ─── Auth ──────────────────────────────────────────────────────────────────
-
+// ─── Auth API ──────────────────────────────────────────────────────────────
 export const authAPI = {
   register: async (email: string, password: string, name: string): Promise<AuthResponse> => {
-    const { data } = await api.post('/auth/register', { email, password, name });
+    // Force UTF-8 and trimmed inputs
+    const body = { email: email.trim(), password, name: name.trim() };
+    const { data } = await api.post('/auth/register', body);
     return data;
   },
 
   login: async (email: string, password: string): Promise<AuthResponse> => {
-    const { data } = await api.post('/auth/login', { email, password });
+    const body = { email: email.trim(), password };
+    const { data } = await api.post('/auth/login', body);
     return data;
   },
 
@@ -66,8 +71,7 @@ export const authAPI = {
   },
 };
 
-// ─── Sessions ──────────────────────────────────────────────────────────────
-
+// ─── Sessions API ──────────────────────────────────────────────────────────
 export const sessionsAPI = {
   create: async (title?: string, description?: string): Promise<Session> => {
     const { data } = await api.post('/sessions', { title, description });
