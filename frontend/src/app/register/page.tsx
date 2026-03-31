@@ -17,14 +17,25 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedPassword = password.trim();
+
     try {
-      // Normalize email to lowercase + trim
-      const normalizedEmail = email.trim().toLowerCase();
-      await register(name, normalizedEmail, password);
+      await register(trimmedName, trimmedEmail, trimmedPassword);
       toast.success('Account created successfully!');
       router.push('/dashboard');
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || 'Registration failed');
+      // Handle Axios/FastAPI validation errors (422)
+      if (err?.response?.data) {
+        const detail = Array.isArray(err.response.data)
+          ? err.response.data.map((e: any) => e.msg).join(', ')
+          : err.response.data.detail;
+        toast.error(detail || 'Registration failed');
+      } else {
+        toast.error('Registration failed');
+      }
     }
   };
 
