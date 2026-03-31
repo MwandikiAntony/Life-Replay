@@ -1,4 +1,3 @@
-'use client';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { authAPI, setToken, clearToken } from '@/lib/api';
@@ -9,14 +8,14 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string) => Promise<void>;
+  register: (name: string, email: string, password: string) => Promise<void>; // corrected order
   logout: () => void;
   fetchMe: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       user: null,
       isAuthenticated: false,
       isLoading: false,
@@ -24,25 +23,22 @@ export const useAuthStore = create<AuthState>()(
       login: async (email, password) => {
         set({ isLoading: true });
         try {
-          // Normalize email to avoid case issues
-          const normalizedEmail = email.trim().toLowerCase();
-          const res = await authAPI.login(normalizedEmail, password);
+          const res = await authAPI.login(email, password);
           setToken(res.access_token);
           set({ user: res.user, isAuthenticated: true, isLoading: false });
-        } catch (err) {
+        } catch (err: any) {
           set({ isLoading: false });
           throw err;
         }
       },
 
-      register: async (email, password, name) => {
+      register: async (name, email, password) => {
         set({ isLoading: true });
         try {
-          const normalizedEmail = email.trim().toLowerCase();
-          const res = await authAPI.register(normalizedEmail, password, name);
+          const res = await authAPI.register(email, password, name);
           setToken(res.access_token);
           set({ user: res.user, isAuthenticated: true, isLoading: false });
-        } catch (err) {
+        } catch (err: any) {
           set({ isLoading: false });
           throw err;
         }
