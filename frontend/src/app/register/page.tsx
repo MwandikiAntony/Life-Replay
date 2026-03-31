@@ -17,13 +17,11 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password.length < 8) {
-      toast.error('Password must be at least 8 characters');
-      return;
-    }
     try {
-      await register(email, password, name);
-      toast.success('Account created! Welcome to LifeReplay.');
+      // Normalize email to lowercase + trim
+      const normalizedEmail = email.trim().toLowerCase();
+      await register(name, normalizedEmail, password);
+      toast.success('Account created successfully!');
       router.push('/dashboard');
     } catch (err: any) {
       toast.error(err?.response?.data?.detail || 'Registration failed');
@@ -32,9 +30,10 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen bg-void bg-grid flex items-center justify-center px-4">
+      {/* Ambient glow */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/3 right-1/3 w-96 h-96 bg-violet/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/3 left-1/2 w-64 h-64 bg-cyan/5 rounded-full blur-3xl" />
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-96 h-96 bg-cyan/5 rounded-full blur-3xl" />
+        <div className="absolute top-1/2 left-1/3 w-64 h-64 bg-violet/5 rounded-full blur-3xl" />
       </div>
 
       <motion.div
@@ -43,6 +42,7 @@ export default function RegisterPage() {
         transition={{ duration: 0.5 }}
         className="w-full max-w-md relative"
       >
+        {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 mb-4">
             <div className="w-8 h-8 rounded-lg bg-cyan/10 border border-cyan/30 flex items-center justify-center glow-cyan">
@@ -50,22 +50,22 @@ export default function RegisterPage() {
             </div>
             <span className="font-display font-bold text-xl text-text-primary">LifeReplay</span>
           </div>
-          <h1 className="font-display text-3xl font-bold text-text-primary mb-2">Start your journey</h1>
-          <p className="text-text-secondary text-sm">Create your account and become a better communicator</p>
+          <h1 className="font-display text-3xl font-bold text-text-primary mb-2">Create Account</h1>
+          <p className="text-text-secondary text-sm">Sign up to start your coaching journey</p>
         </div>
 
+        {/* Card */}
         <div className="glass-panel rounded-2xl p-8">
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">Full Name</label>
+              <label className="block text-sm font-medium text-text-secondary mb-2">Name</label>
               <input
                 type="text"
                 value={name}
                 onChange={e => setName(e.target.value)}
                 required
-                placeholder="Alex Johnson"
+                placeholder="Your Name"
                 className="input-field"
-                autoComplete="name"
               />
             </div>
 
@@ -90,8 +90,7 @@ export default function RegisterPage() {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   required
-                  minLength={8}
-                  placeholder="Min. 8 characters"
+                  placeholder="••••••••"
                   className="input-field pr-12"
                   autoComplete="new-password"
                 />
@@ -116,7 +115,7 @@ export default function RegisterPage() {
                   Creating account...
                 </>
               ) : (
-                'Create Account'
+                'Sign Up'
               )}
             </button>
           </form>
@@ -128,6 +127,11 @@ export default function RegisterPage() {
             </Link>
           </div>
         </div>
+
+        {/* Demo hint */}
+        <p className="text-center text-xs text-text-tertiary mt-4">
+          Demo: use any email/password to explore
+        </p>
       </motion.div>
     </div>
   );
